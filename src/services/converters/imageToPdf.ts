@@ -41,14 +41,16 @@ async function loadImageElement(file: File): Promise<HTMLImageElement> {
 
 async function imageFileToEmbeddedBytes(
   file: File,
-  cropAspect?: number
+  cropAspect?: number,
+  forceCanvas = false
 ): Promise<{bytes: Uint8Array; isPng: boolean; width: number; height: number}> {
   const img = await loadImageElement(file);
   const srcW = img.naturalWidth || img.width;
   const srcH = img.naturalHeight || img.height;
 
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-  const needsCanvasConversion = ext === 'webp' || file.type === 'image/webp' || cropAspect !== undefined;
+  const needsCanvasConversion =
+    forceCanvas || ext === 'webp' || file.type === 'image/webp' || cropAspect !== undefined;
 
   if (!needsCanvasConversion) {
     const buffer = await file.arrayBuffer();
@@ -146,10 +148,18 @@ export async function convertImagesToPdf(
     const cropAspect =
       options.imageFit === 'cover' && options.pageSize !== 'fit' ? availW / availH : undefined;
 
-    const prepared = await imageFileToEmbeddedBytes(file, cropAspect);
-    const embeddedImage = prepared.isPng
-      ? await pdfDoc.embedPng(prepared.bytes)
-      : await pdfDoc.embedJpg(prepared.bytes);
+    let prepared = await imageFileToEmbeddedBytes(file, cropAspect, false);
+    let embeddedImage;
+    try {
+      embeddedImage = prepared.isPng
+        ? await pdfDoc.embedPng(prepared.bytes)
+        : await pdfDoc.embedJpg(prepared.bytes);
+    } catch {
+      prepared = await imageFileToEmbeddedBytes(file, cropAspect, true);
+      embeddedImage = prepared.isPng
+        ? await pdfDoc.embedPng(prepared.bytes)
+        : await pdfDoc.embedJpg(prepared.bytes);
+    }
 
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
 

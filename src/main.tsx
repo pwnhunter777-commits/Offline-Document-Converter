@@ -6,6 +6,9 @@ import './index.css';
 // Register Service Worker for offline-first PWA caching
 registerSW({
   immediate: true,
+  onRegisterError() {
+    // Gracefully ignore SW registration failures in restricted contexts
+  },
 });
 
 createRoot(document.getElementById('root')!).render(<App />);

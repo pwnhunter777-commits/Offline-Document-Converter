@@ -2,7 +2,9 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // Configure pdf.js worker locally from bundled asset — zero external CDN dependency!
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+if (typeof pdfWorkerUrl === 'string' && pdfWorkerUrl.length > 0) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+}
 
 export interface ExtractedLine {
   text: string;
@@ -45,13 +47,11 @@ export async function getPdfPageCount(file: File): Promise<number> {
   return count;
 }
 
-export async function renderPdfPageToDataUrl(
+export async function renderPdfPageToCanvas(
   pdfDoc: pdfjsLib.PDFDocumentProxy,
   pageNumber: number,
-  scale = 0.45,
-  format: 'image/jpeg' | 'image/png' = 'image/jpeg',
-  quality = 0.78
-): Promise<{dataUrl: string; width: number; height: number}> {
+  scale = 0.45
+): Promise<HTMLCanvasElement> {
   const page = await pdfDoc.getPage(pageNumber);
   const viewport = page.getViewport({scale});
   const canvas = document.createElement('canvas');
@@ -70,9 +70,24 @@ export async function renderPdfPageToDataUrl(
     canvas,
   }).promise;
 
-  const dataUrl = canvas.toDataURL(format, quality);
   page.cleanup();
-  return {dataUrl, width: canvas.width, height: canvas.height};
+  return canvas;
+}
+
+export async function renderPdfPageToDataUrl(
+  pdfDoc: pdfjsLib.PDFDocumentProxy,
+  pageNumber: number,
+  scale = 0.45,
+  format: 'image/jpeg' | 'image/png' = 'image/jpeg',
+  quality = 0.78
+): Promise<{dataUrl: string; width: number; height: number}> {
+  const canvas = await renderPdfPageToCanvas(pdfDoc, pageNumber, scale);
+  const width = canvas.width;
+  const height = canvas.height;
+  const dataUrl = canvas.toDataURL(format, quality);
+  canvas.width = 0;
+  canvas.height = 0;
+  return {dataUrl, width, height};
 }
 
 export async function renderPdfPageToBlob(
@@ -81,12 +96,14 @@ export async function renderPdfPageToBlob(
   scale: number,
   mimeType: 'image/png' | 'image/jpeg',
   quality: number
-): Promise<{blob: Blob; dataUrl: string; width: number; height: number}> {
+): Promise<{blob: Blob; width: number; height: number}> {
   const page = await pdfDoc.getPage(pageNumber);
   const viewport = page.getViewport({scale});
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.floor(viewport.width));
-  canvas.height = Math.max(1, Math.floor(viewport.height));
+  const width = Math.max(1, Math.floor(viewport.width));
+  const height = Math.max(1, Math.floor(viewport.height));
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) {
     throw new Error('Canvas 2D context unavailable.');
@@ -94,7 +111,7 @@ export async function renderPdfPageToBlob(
 
   if (mimeType === 'image/jpeg') {
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, width, height);
   }
 
   await page.render({
@@ -110,9 +127,10 @@ export async function renderPdfPageToBlob(
       quality
     );
   });
-  const dataUrl = canvas.toDataURL(mimeType, Math.min(0.85, quality));
   page.cleanup();
-  return {blob, dataUrl, width: canvas.width, height: canvas.height};
+  canvas.width = 0;
+  canvas.height = 0;
+  return {blob, width, height};
 }
 
 export async function extractPdfPagesStructuredText(

@@ -7,7 +7,6 @@ export type ImageOutputFormat = 'png' | 'jpeg';
 export interface RenderedPdfImage {
   pageNumber: number;
   fileName: string;
-  dataUrl: string;
   width: number;
   height: number;
   blob: Blob;
@@ -43,7 +42,6 @@ export async function convertPdfPagesToImages(
       results.push({
         pageNumber: pageNum,
         fileName: `${baseName}_page_${pageNum}.${ext}`,
-        dataUrl: rendered.dataUrl,
         width: rendered.width,
         height: rendered.height,
         blob: rendered.blob,

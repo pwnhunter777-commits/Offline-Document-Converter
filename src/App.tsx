@@ -256,12 +256,10 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-          <p className="font-medium text-slate-700 dark:text-slate-300">
-            {t.appName} · {t.slogan}
-          </p>
-          <p>{t.localPrivacyBanner}</p>
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-5">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-medium text-slate-700 dark:text-slate-300">{t.appName}</p>
+          <p>{t.slogan}</p>
         </div>
       </footer>
 

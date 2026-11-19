@@ -48,32 +48,19 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
       addFiles(initialFiles);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      items.forEach((item) => {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      });
-    };
-  }, [items]);
+  }, [initialFiles]);
 
   const addFiles = (newFiles: File[]) => {
     const mapped: UploadedFileItem[] = newFiles.map((file) => ({
       id: generateId(),
       file,
-      previewUrl: URL.createObjectURL(file),
     }));
     setItems((prev) => [...prev, ...mapped]);
     setResultBlob(null);
   };
 
   const handleRemove = (id: string) => {
-    setItems((prev) => {
-      const target = prev.find((i) => i.id === id);
-      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((i) => i.id !== id);
-    });
+    setItems((prev) => prev.filter((i) => i.id !== id));
     setResultBlob(null);
   };
 
@@ -89,9 +76,6 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
   };
 
   const handleClearAll = () => {
-    items.forEach((i) => {
-      if (i.previewUrl) URL.revokeObjectURL(i.previewUrl);
-    });
     setItems([]);
     setResultBlob(null);
   };

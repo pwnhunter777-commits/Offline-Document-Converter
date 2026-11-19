@@ -136,12 +136,14 @@ export const SplitPdfTool: React.FC<ToolProps> = ({
           setOutputs([]);
           setSelectedPages([]);
           setTotalPages(0);
+          setRangesInput('1-1');
         }}
         onRemoveFile={() => {
           setItems([]);
           setOutputs([]);
           setSelectedPages([]);
           setTotalPages(0);
+          setRangesInput('1-1');
         }}
         supportedLabel="PDF"
         onValidationError={(msg) => onNotify('error', msg)}

@@ -65,6 +65,10 @@ export const ExtractPagesTool: React.FC<ToolProps> = ({
   const handleRangeChange = (val: string) => {
     setRangeText(val);
     setResultBlob(null);
+    if (val.trim() === '') {
+      setSelectedPages([]);
+      return;
+    }
     if (totalPages > 0) {
       const parsed = parseFlatPages(val, totalPages);
       if (parsed) {
@@ -79,10 +83,17 @@ export const ExtractPagesTool: React.FC<ToolProps> = ({
       return;
     }
 
-    const targets =
-      rangeText.trim().length > 0
-        ? parseFlatPages(rangeText, totalPages) ?? selectedPages
-        : selectedPages;
+    let targets: number[];
+    if (rangeText.trim().length > 0) {
+      const parsed = parseFlatPages(rangeText, totalPages);
+      if (!parsed || parsed.length === 0) {
+        onNotify('error', t.splitInvalidRanges);
+        return;
+      }
+      targets = parsed;
+    } else {
+      targets = selectedPages;
+    }
 
     if (targets.length === 0) {
       onNotify('error', t.splitInvalidRanges);

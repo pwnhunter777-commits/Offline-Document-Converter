@@ -16,7 +16,6 @@ import {formatBytes, verifyFileSignature} from '../utils/format';
 export interface UploadedFileItem {
   id: string;
   file: File;
-  previewUrl?: string;
 }
 
 interface FileUploadZoneProps {
@@ -128,7 +127,6 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
         <p className="mt-4 text-base font-semibold text-slate-900 dark:text-white">
           {multiple ? t.dropzoneTitleMulti : t.dropzoneTitle}
         </p>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t.dropzoneHint}</p>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
           <span className="inline-flex items-center justify-center min-h-[42px] px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
@@ -194,23 +192,15 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
 
           {files.map((item, idx) => (
             <div key={item.id} className="px-4 py-3 flex items-center gap-3">
-              {item.previewUrl ? (
-                <img
-                  src={item.previewUrl}
-                  alt={item.file.name}
-                  className="w-11 h-11 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0 bg-slate-100 dark:bg-slate-800"
-                />
-              ) : (
-                <div className="w-11 h-11 rounded-lg bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                  {expectedKind === 'image' ? (
-                    <ImageIcon className="w-5 h-5" />
-                  ) : expectedKind === 'pdf' ? (
-                    <FileText className="w-5 h-5" />
-                  ) : (
-                    <FileIcon className="w-5 h-5" />
-                  )}
-                </div>
-              )}
+              <div className="w-11 h-11 rounded-lg bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                {expectedKind === 'image' ? (
+                  <ImageIcon className="w-5 h-5" />
+                ) : expectedKind === 'pdf' ? (
+                  <FileText className="w-5 h-5" />
+                ) : (
+                  <FileIcon className="w-5 h-5" />
+                )}
+              </div>
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-slate-900 dark:text-white truncate">

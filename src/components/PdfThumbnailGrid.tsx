@@ -1,12 +1,42 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Check, Eye, Loader2, Trash2, X} from 'lucide-react';
 import type {TranslationDictionary} from '../i18n/translations';
-import {destroyPdfDocument, loadPdfDocument, renderPdfPageToDataUrl} from '../services/pdfEngine';
+import {destroyPdfDocument, loadPdfDocument, renderPdfPageToCanvas} from '../services/pdfEngine';
 
 export interface PageThumbnailItem {
   pageNumber: number;
-  dataUrl: string;
+  sourceCanvas: HTMLCanvasElement;
 }
+
+const CanvasSnapshot: React.FC<{
+  sourceCanvas: HTMLCanvasElement;
+  className?: string;
+  style?: React.CSSProperties;
+  ariaLabel: string;
+}> = ({sourceCanvas, className, style, ariaLabel}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const dest = canvasRef.current;
+    if (!dest) return;
+    dest.width = sourceCanvas.width;
+    dest.height = sourceCanvas.height;
+    const ctx = dest.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, dest.width, dest.height);
+    ctx.drawImage(sourceCanvas, 0, 0);
+  }, [sourceCanvas]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-label={ariaLabel}
+      role="img"
+      className={className}
+      style={style}
+    />
+  );
+};
 
 interface PdfThumbnailGridProps {
   file: File;
@@ -60,9 +90,8 @@ export const PdfThumbnailGrid: React.FC<PdfThumbnailGridProps> = ({
         const batch: PageThumbnailItem[] = [];
         for (let p = 1; p <= limit; p++) {
           if (cancelled) break;
-          const rendered = await renderPdfPageToDataUrl(pdfDoc, p, 0.42, 'image/jpeg', 0.72);
-          batch.push({pageNumber: p, dataUrl: rendered.dataUrl});
-          // Update incrementally for responsive visual feedback
+          const renderedCanvas = await renderPdfPageToCanvas(pdfDoc, p, 0.55);
+          batch.push({pageNumber: p, sourceCanvas: renderedCanvas});
           if (p % 4 === 0 || p === limit) {
             if (!cancelled) setThumbnails([...batch]);
           }
@@ -89,7 +118,10 @@ export const PdfThumbnailGrid: React.FC<PdfThumbnailGridProps> = ({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-400">
         <span>
-          {t.totalPages}: <strong className="font-mono tabular-nums text-slate-900 dark:text-white">{totalPages}</strong>
+          {t.totalPages}:{' '}
+          <strong className="font-mono tabular-nums text-slate-900 dark:text-white">
+            {totalPages}
+          </strong>
         </span>
         {loading && (
           <span className="inline-flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
@@ -103,7 +135,8 @@ export const PdfThumbnailGrid: React.FC<PdfThumbnailGridProps> = ({
         {thumbnails.map((thumb) => {
           const isSelected = selectedSet.has(thumb.pageNumber);
           const shouldRotate =
-            rotationDelta !== 0 && (rotateTarget === 'all' || (rotateTarget === 'selected' && isSelected));
+            rotationDelta !== 0 &&
+            (rotateTarget === 'all' || (rotateTarget === 'selected' && isSelected));
 
           const borderClass =
             mode === 'remove' && isSelected
@@ -129,9 +162,9 @@ export const PdfThumbnailGrid: React.FC<PdfThumbnailGridProps> = ({
                 className="w-full text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 rounded-lg"
               >
                 <div className="aspect-[3/4] w-full overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                  <img
-                    src={thumb.dataUrl}
-                    alt={`${t.pageNumber} ${thumb.pageNumber}`}
+                  <CanvasSnapshot
+                    sourceCanvas={thumb.sourceCanvas}
+                    ariaLabel={`${t.pageNumber} ${thumb.pageNumber}`}
                     className={`max-w-full max-h-full object-contain transition-transform duration-200 ${
                       mode === 'remove' && isSelected ? 'opacity-45' : ''
                     }`}
@@ -152,7 +185,12 @@ export const PdfThumbnailGrid: React.FC<PdfThumbnailGridProps> = ({
                           : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
                       }`}
                     >
-                      {isSelected && (mode === 'remove' ? <Trash2 className="w-3 h-3" /> : <Check className="w-3 h-3" />)}
+                      {isSelected &&
+                        (mode === 'remove' ? (
+                          <Trash2 className="w-3 h-3" />
+                        ) : (
+                          <Check className="w-3 h-3" />
+                        ))}
                     </span>
                   )}
                 </div>
@@ -203,9 +241,9 @@ export const PdfThumbnailGrid: React.FC<PdfThumbnailGridProps> = ({
               </button>
             </div>
             <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-xl p-4">
-              <img
-                src={zoomPage.dataUrl}
-                alt={`${t.pageNumber} ${zoomPage.pageNumber}`}
+              <CanvasSnapshot
+                sourceCanvas={zoomPage.sourceCanvas}
+                ariaLabel={`${t.pageNumber} ${zoomPage.pageNumber}`}
                 className="max-w-full max-h-[68vh] object-contain rounded shadow"
               />
             </div>

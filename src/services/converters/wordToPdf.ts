@@ -48,6 +48,7 @@ export async function convertWordHtmlToPdf(
 
   // Scoped rich document typography styles
   const styleEl = document.createElement('style');
+  styleEl.setAttribute('data-odc-docx', 'true');
   styleEl.textContent = `
     .odc-docx-render h1 { font-size: 24px; font-weight: 700; margin: 0 0 14px; color: #0f172a; line-height: 1.3; }
     .odc-docx-render h2 { font-size: 19px; font-weight: 700; margin: 20px 0 10px; color: #0f172a; line-height: 1.35; }
@@ -95,6 +96,14 @@ export async function convertWordHtmlToPdf(
       backgroundColor: '#ffffff',
       logging: false,
       windowWidth: 794,
+      onclone: (clonedDoc) => {
+        clonedDoc.documentElement.className = '';
+        clonedDoc.body.className = '';
+        clonedDoc.body.style.cssText = 'margin:0;padding:0;background:#ffffff;color:#0f172a;';
+        clonedDoc
+          .querySelectorAll('link[rel="stylesheet"], style:not([data-odc-docx])')
+          .forEach((el) => el.remove());
+      },
     });
 
     onProgress?.(75);

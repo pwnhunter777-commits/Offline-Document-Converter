@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Archive, Download, Loader2} from 'lucide-react';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {
@@ -11,6 +11,45 @@ import type {HistoryStatus, ToolId} from '../../types';
 import {downloadBlob, formatBytes, generateId, stripExtension} from '../../utils/format';
 import {FileUploadZone, type UploadedFileItem} from '../FileUploadZone';
 import {PdfThumbnailGrid} from '../PdfThumbnailGrid';
+
+const BlobCanvasPreview: React.FC<{blob: Blob; ariaLabel: string; className?: string}> = ({
+  blob,
+  ariaLabel,
+  className,
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const draw = async () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      try {
+        const bitmap = await createImageBitmap(blob);
+        if (!active) {
+          bitmap.close();
+          return;
+        }
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(bitmap, 0, 0);
+        }
+        bitmap.close();
+      } catch {
+        // ignore preview draw failure
+      }
+    };
+    void draw();
+    return () => {
+      active = false;
+    };
+  }, [blob]);
+
+  return <canvas ref={canvasRef} aria-label={ariaLabel} role="img" className={className} />;
+};
 
 interface ToolProps {
   t: TranslationDictionary;
@@ -256,9 +295,9 @@ export const PdfToImageTool: React.FC<ToolProps> = ({
                   className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2.5 bg-slate-50 dark:bg-slate-800/40"
                 >
                   <div className="aspect-[4/3] rounded-lg overflow-hidden bg-white dark:bg-slate-900 flex items-center justify-center">
-                    <img
-                      src={img.dataUrl}
-                      alt={img.fileName}
+                    <BlobCanvasPreview
+                      blob={img.blob}
+                      ariaLabel={img.fileName}
                       className="max-w-full max-h-full object-contain"
                     />
                   </div>

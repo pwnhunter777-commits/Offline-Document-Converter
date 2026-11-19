@@ -60,6 +60,9 @@ export interface TranslationDictionary {
   iosInstallTitle: string;
   iosInstallStep1: string;
   iosInstallStep2: string;
+  desktopInstallTitle: string;
+  desktopInstallStep1: string;
+  desktopInstallStep2: string;
   close: string;
   confirmTitle: string;
   confirmCancel: string;
@@ -265,6 +268,9 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     iosInstallTitle: 'Install on iPhone or iPad',
     iosInstallStep1: 'Tap the Share icon in your Safari toolbar.',
     iosInstallStep2: 'Scroll down and tap "Add to Home Screen".',
+    desktopInstallTitle: 'Install Offline Document Converter',
+    desktopInstallStep1: 'Open the browser menu or look for the Install icon in the address bar.',
+    desktopInstallStep2: 'Click "Install" or "Add to Home Screen" to use the app offline anytime.',
     close: 'Close',
     confirmTitle: 'Confirm Action',
     confirmCancel: 'Cancel',
@@ -504,6 +510,9 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     iosInstallTitle: 'iPhone அல்லது iPad-ல் நிறுவவும்',
     iosInstallStep1: 'Safari கருவிப்பட்டியில் உள்ள Share (பகிர்) பொத்தானைத் தட்டவும்.',
     iosInstallStep2: 'கீழே உருட்டி "Add to Home Screen" என்பதைத் தட்டவும்.',
+    desktopInstallTitle: 'ஆஃப்லைன் ஆவண மாற்றியை நிறுவவும்',
+    desktopInstallStep1: 'உலாவி மெனுவைத் திறக்கவும் அல்லது முகவரிப் பட்டியில் உள்ள Install ஐகானைப் பார்க்கவும்.',
+    desktopInstallStep2: 'இணையமின்றி பயன்படுத்த "Install" அல்லது "Add to Home Screen" என்பதைத் தேர்ந்தெடுக்கவும்.',
     close: 'மூடு',
     confirmTitle: 'செயலை உறுதிப்படுத்து',
     confirmCancel: 'ரத்து செய்',

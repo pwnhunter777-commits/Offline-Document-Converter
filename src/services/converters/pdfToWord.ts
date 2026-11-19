@@ -16,6 +16,11 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+// Strip ASCII/Unicode control characters forbidden in OOXML (.docx)
+function sanitizeXmlText(input: string): string {
+  return input.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+}
+
 export async function convertPdfToWord(
   file: File,
   onProgress?: (current: number, total: number) => void
@@ -79,7 +84,11 @@ export async function convertPdfToWord(
         bufferParagraphText = '';
       };
 
-      for (const line of page.lines) {
+      for (const rawLine of page.lines) {
+        const cleanText = sanitizeXmlText(rawLine.text);
+        if (!cleanText) continue;
+        const line = {...rawLine, text: cleanText};
+
         totalChars += line.text.length;
         const isH1 = line.fontSize >= bodyFontSize * 1.45 && line.text.length < 120;
         const isH2 = !isH1 && line.fontSize >= bodyFontSize * 1.2 && line.text.length < 140;
@@ -127,7 +136,8 @@ export async function convertPdfToWord(
 
         const yGap = prevY !== null ? Math.abs(prevY - line.y) : 0;
         const startsNewParagraph =
-          prevY !== null && (yGap > prevSize * 1.85 || bufferBold !== line.isBold);
+          prevY !== null &&
+          (yGap > prevSize * 1.85 || bufferBold !== line.isBold || bufferItalic !== line.isItalic);
 
         if (startsNewParagraph) {
           flushBuffer();

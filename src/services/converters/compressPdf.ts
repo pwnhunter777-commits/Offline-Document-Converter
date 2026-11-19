@@ -108,6 +108,8 @@ export async function compressPdfFile(
       });
 
       page.cleanup();
+      canvas.width = 0;
+      canvas.height = 0;
       onProgress?.(p, totalPages);
     }
 

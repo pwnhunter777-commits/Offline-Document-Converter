@@ -60,7 +60,6 @@ export default defineConfig(() => {
         },
         devOptions: {
           enabled: true,
-          type: 'module',
         },
       }),
       // Copies src/assets into dist/ so root-relative URLs like

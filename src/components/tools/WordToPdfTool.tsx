@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {CheckCircle2, Download, Info, Loader2} from 'lucide-react';
+import {CheckCircle2, Download, Loader2} from 'lucide-react';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {convertWordHtmlToPdf, extractWordPreview} from '../../services/converters/wordToPdf';
 import type {HistoryStatus, ToolId} from '../../types';
@@ -56,7 +56,7 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
       void loadDocx(file);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialFiles]);
 
   const activeFile = items[0]?.file ?? null;
   const outputName = activeFile ? `${stripExtension(activeFile.name)}.pdf` : 'document.pdf';
@@ -94,10 +94,6 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/70 dark:bg-blue-950/40 p-4 flex items-start gap-3">
-        <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{t.wordToPdfNotice}</p>
-      </div>
 
       <FileUploadZone
         t={t}
