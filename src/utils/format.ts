@@ -105,14 +105,15 @@ export async function verifyFileSignature(
   expected: 'pdf' | 'docx' | 'image'
 ): Promise<boolean> {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-  const slice = await file.slice(0, 16).arrayBuffer();
+  const readSize = expected === 'pdf' ? 1024 : 16;
+  const slice = await file.slice(0, readSize).arrayBuffer();
   const bytes = new Uint8Array(slice);
 
   if (expected === 'pdf') {
     if (ext !== 'pdf' && file.type !== 'application/pdf') return false;
-    // "%PDF-" = 0x25 0x50 0x44 0x46 0x2D
-    const header = String.fromCharCode(...bytes.slice(0, 5));
-    return header === '%PDF-';
+    // Accept "%PDF-" anywhere in the first 1024 bytes (some producers prepend BOM/whitespace/headers)
+    const text = String.fromCharCode(...bytes);
+    return text.includes('%PDF-');
   }
 
   if (expected === 'docx') {
@@ -136,4 +137,14 @@ export async function verifyFileSignature(
   }
 
   return false;
+}
+
+export async function detectValidFileKind(
+  file: File
+): Promise<'pdf' | 'docx' | 'image' | null> {
+  if (file.size === 0) return null;
+  if (await verifyFileSignature(file, 'pdf')) return 'pdf';
+  if (await verifyFileSignature(file, 'image')) return 'image';
+  if (await verifyFileSignature(file, 'docx')) return 'docx';
+  return null;
 }

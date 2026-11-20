@@ -9,9 +9,11 @@ import {
   ShieldCheck,
   Trash2,
   UploadCloud,
+  X,
 } from 'lucide-react';
 import type {TranslationDictionary} from '../i18n/translations';
 import {formatBytes, verifyFileSignature} from '../utils/format';
+import {ConfirmDialog} from './ConfirmDialog';
 
 export interface UploadedFileItem {
   id: string;
@@ -31,7 +33,10 @@ interface FileUploadZoneProps {
   supportedLabel: string;
   reorderHint?: string;
   onValidationError: (message: string) => void;
+  onInfo?: (message: string) => void;
+  confirmLargeFileBytes?: number;
   uploadProgress?: number | null;
+  onCancelProcessing?: () => void;
 }
 
 const LARGE_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -49,14 +54,22 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
   supportedLabel,
   reorderHint,
   onValidationError,
+  onInfo,
+  confirmLargeFileBytes,
   uploadProgress = null,
+  onCancelProcessing,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingLargeFiles, setPendingLargeFiles] = useState<File[] | null>(null);
 
   const validateAndEmit = async (rawList: FileList | null) => {
     if (!rawList || rawList.length === 0) return;
     const candidates = Array.from(rawList);
+    if (!multiple && candidates.length > 1) {
+      onInfo?.(t.singleFileOnlyUsed);
+    }
     const selected = multiple ? candidates : [candidates[0]];
     const valid: File[] = [];
 
@@ -73,12 +86,21 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
       valid.push(file);
     }
 
-    if (valid.length > 0) {
-      onFilesAdded(valid);
-    }
     if (inputRef.current) {
       inputRef.current.value = '';
     }
+
+    if (valid.length === 0) return;
+
+    if (
+      confirmLargeFileBytes !== undefined &&
+      valid.some((f) => f.size > confirmLargeFileBytes)
+    ) {
+      setPendingLargeFiles(valid);
+      return;
+    }
+
+    onFilesAdded(valid);
   };
 
   const hasLargeFile = files.some((item) => item.file.size > LARGE_FILE_BYTES);
@@ -86,13 +108,23 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
   return (
     <div className="space-y-4">
       <div
-        onDragOver={(e) => {
+        onDragEnter={(e) => {
           e.preventDefault();
+          dragCounterRef.current += 1;
           setIsDragging(true);
         }}
-        onDragLeave={() => setIsDragging(false)}
+        onDragOver={(e) => {
+          e.preventDefault();
+        }}
+        onDragLeave={() => {
+          dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+          if (dragCounterRef.current === 0) {
+            setIsDragging(false);
+          }
+        }}
         onDrop={(e) => {
           e.preventDefault();
+          dragCounterRef.current = 0;
           setIsDragging(false);
           void validateAndEmit(e.dataTransfer.files);
         }}
@@ -156,9 +188,21 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
       {/* Progress bar when active */}
       {uploadProgress !== null && (
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-          <div className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-200 mb-2">
+          <div className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700 dark:text-slate-200 mb-2">
             <span>{t.processing}</span>
-            <span className="font-mono tabular-nums">{Math.round(uploadProgress)}%</span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono tabular-nums">{Math.round(uploadProgress)}%</span>
+              {onCancelProcessing && (
+                <button
+                  type="button"
+                  onClick={onCancelProcessing}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>{t.cancelProcessing}</span>
+                </button>
+              )}
+            </div>
           </div>
           <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
             <div
@@ -252,6 +296,21 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingLargeFiles !== null}
+        danger={false}
+        message={t.confirmLargeFileMessage}
+        t={t}
+        onCancel={() => setPendingLargeFiles(null)}
+        onConfirm={() => {
+          const confirmed = pendingLargeFiles;
+          setPendingLargeFiles(null);
+          if (confirmed && confirmed.length > 0) {
+            onFilesAdded(confirmed);
+          }
+        }}
+      />
     </div>
   );
 };

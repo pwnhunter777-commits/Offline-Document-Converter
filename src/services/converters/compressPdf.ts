@@ -1,5 +1,5 @@
 import {PDFDocument} from 'pdf-lib';
-import {destroyPdfDocument, loadPdfDocument} from '../pdfEngine';
+import {destroyPdfDocument, loadPdfDocument, yieldToMainThread} from '../pdfEngine';
 
 export type CompressionLevel = 'lossless' | 'low' | 'medium' | 'high';
 
@@ -13,35 +13,42 @@ export interface CompressPdfResult {
 }
 
 const RASTER_PRESETS: Record<Exclude<CompressionLevel, 'lossless'>, {scale: number; quality: number}> = {
-  low: {scale: 1.5, quality: 0.82},
-  medium: {scale: 1.25, quality: 0.62},
-  high: {scale: 1.0, quality: 0.42},
+  low: {scale: 1.8, quality: 0.8},
+  medium: {scale: 1.5, quality: 0.65},
+  high: {scale: 1.4, quality: 0.5},
 };
 
 export async function compressPdfFile(
   file: File,
   level: CompressionLevel,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  password?: string,
+  signal?: AbortSignal
 ): Promise<CompressPdfResult> {
   const originalBuffer = await file.arrayBuffer();
   const originalSize = file.size;
 
   if (level === 'lossless') {
+    if (signal?.aborted) {
+      throw new DOMException('Operation cancelled', 'AbortError');
+    }
     onProgress?.(1, 2);
     const srcPdf = await PDFDocument.load(originalBuffer, {ignoreEncryption: false});
-    // Strip bloated metadata & rewrite with object streams enabled
-    srcPdf.setTitle('');
-    srcPdf.setAuthor('');
-    srcPdf.setSubject('');
-    srcPdf.setKeywords([]);
-    srcPdf.setProducer('');
-    srcPdf.setCreator('');
 
     const cleanPdf = await PDFDocument.create();
     const copied = await cleanPdf.copyPages(srcPdf, srcPdf.getPageIndices());
     for (const page of copied) {
       cleanPdf.addPage(page);
     }
+
+    // Strip metadata on the newly created document after copying pages
+    cleanPdf.setTitle('');
+    cleanPdf.setAuthor('');
+    cleanPdf.setSubject('');
+    cleanPdf.setKeywords([]);
+    cleanPdf.setProducer('');
+    cleanPdf.setCreator('');
+
     const bytes = await cleanPdf.save({useObjectStreams: true, addDefaultPage: false});
     onProgress?.(2, 2);
 
@@ -62,13 +69,17 @@ export async function compressPdfFile(
 
   // Raster re-encoding compression via pdf.js + pdf-lib
   const preset = RASTER_PRESETS[level];
-  const pdfDoc = await loadPdfDocument(originalBuffer);
+  const pdfDoc = await loadPdfDocument(originalBuffer, password);
   const totalPages = pdfDoc.numPages;
 
   try {
     const outPdf = await PDFDocument.create();
 
     for (let p = 1; p <= totalPages; p++) {
+      if (signal?.aborted) {
+        throw new DOMException('Operation cancelled', 'AbortError');
+      }
+
       const page = await pdfDoc.getPage(p);
       const baseViewport = page.getViewport({scale: 1});
       const renderViewport = page.getViewport({scale: preset.scale});
@@ -111,6 +122,7 @@ export async function compressPdfFile(
       canvas.width = 0;
       canvas.height = 0;
       onProgress?.(p, totalPages);
+      await yieldToMainThread();
     }
 
     const bytes = await outPdf.save({useObjectStreams: true});

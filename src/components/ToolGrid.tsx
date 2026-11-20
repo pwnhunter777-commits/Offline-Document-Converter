@@ -1,26 +1,28 @@
-import React, {useState} from 'react';
+import React from 'react';
 import {ArrowRight, Search, X} from 'lucide-react';
 import type {TranslationDictionary} from '../i18n/translations';
 import {TOOL_DEFINITIONS, type ToolId} from '../types';
 import {ToolIcon} from './ToolIcon';
 
+export type CategoryFilter = 'all' | 'convert' | 'organize' | 'optimize';
+
 interface ToolGridProps {
   t: TranslationDictionary;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  category: CategoryFilter;
+  onCategoryChange: (c: CategoryFilter) => void;
   onSelectTool: (toolId: ToolId) => void;
 }
-
-type CategoryFilter = 'all' | 'convert' | 'organize' | 'optimize';
 
 export const ToolGrid: React.FC<ToolGridProps> = ({
   t,
   searchQuery,
   onSearchChange,
+  category,
+  onCategoryChange,
   onSelectTool,
 }) => {
-  const [category, setCategory] = useState<CategoryFilter>('all');
-
   const query = searchQuery.trim().toLowerCase();
 
   const filteredTools = TOOL_DEFINITIONS.filter((tool) => {
@@ -82,7 +84,7 @@ export const ToolGrid: React.FC<ToolGridProps> = ({
               <button
                 key={f.id}
                 type="button"
-                onClick={() => setCategory(f.id)}
+                onClick={() => onCategoryChange(f.id)}
                 className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   category === f.id
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
@@ -103,7 +105,7 @@ export const ToolGrid: React.FC<ToolGridProps> = ({
             type="button"
             onClick={() => {
               onSearchChange('');
-              setCategory('all');
+              onCategoryChange('all');
             }}
             className="mt-4 inline-flex items-center justify-center min-h-[40px] px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 cursor-pointer"
           >

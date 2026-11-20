@@ -1,10 +1,12 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {AlertTriangle, CheckCircle2, Download, Info, Loader2} from 'lucide-react';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {convertPdfToWord, type PdfToWordResult} from '../../services/converters/pdfToWord';
+import {PdfPasswordError} from '../../services/pdfEngine';
 import type {HistoryStatus, ToolId} from '../../types';
 import {downloadBlob, formatBytes, generateId, stripExtension} from '../../utils/format';
 import {FileUploadZone, type UploadedFileItem} from '../FileUploadZone';
+import {PdfPasswordPrompt} from '../PdfPasswordPrompt';
 import {PdfThumbnailGrid} from '../PdfThumbnailGrid';
 
 interface ToolProps {
@@ -32,34 +34,54 @@ export const PdfToWordTool: React.FC<ToolProps> = ({
   const [items, setItems] = useState<UploadedFileItem[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
   const [result, setResult] = useState<PdfToWordResult | null>(null);
+  const [pdfPassword, setPdfPassword] = useState<string | undefined>(undefined);
+  const [needsPassword, setNeedsPassword] = useState(false);
+  const [incorrectPassword, setIncorrectPassword] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (initialFiles.length > 0) {
       setItems([{id: generateId(), file: initialFiles[0]}]);
+      setPdfPassword(undefined);
+      setNeedsPassword(false);
+      setIncorrectPassword(false);
     }
   }, [initialFiles]);
 
-  const activeFile = items[0]?.file ?? null;
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
-  const handleConvert = async () => {
+  const activeFile = items[0]?.file ?? null;
+  const outputName = activeFile ? `${stripExtension(activeFile.name)}.docx` : 'document.docx';
+
+  const runConvert = async (passwordOverride?: string) => {
     if (!activeFile) {
       onNotify('error', t.noFilesSelected);
       return;
     }
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     setProgress(5);
     setResult(null);
 
     try {
-      const res = await convertPdfToWord(activeFile, (curr, total) =>
-        setProgress(Math.round((curr / total) * 100))
+      const res = await convertPdfToWord(
+        activeFile,
+        (curr, total) => setProgress(Math.round((curr / total) * 100)),
+        passwordOverride ?? pdfPassword,
+        controller.signal
       );
       setResult(res);
+      setNeedsPassword(false);
+      setIncorrectPassword(false);
 
-      const outName = `${stripExtension(activeFile.name)}.docx`;
       await onRecordHistory({
         fileName: activeFile.name,
-        outputFileName: outName,
+        outputFileName: outputName,
         toolId: 'pdf-to-word',
         conversionType: t.tools['pdf-to-word'].name,
         inputSize: activeFile.size,
@@ -71,17 +93,34 @@ export const PdfToWordTool: React.FC<ToolProps> = ({
       if (res.isLowTextDensity) {
         onNotify('warning', t.readyToDownload, t.pdfToWordScannedWarning);
       } else {
-        onNotify('success', t.readyToDownload, outName);
+        onNotify('success', t.readyToDownload, outputName);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t.corruptedFileError;
-      onNotify('error', msg);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        onNotify('info', t.processingCancelled);
+      } else if (err instanceof PdfPasswordError) {
+        setNeedsPassword(true);
+        setIncorrectPassword(err.incorrect);
+        onNotify('error', err.incorrect ? t.passwordIncorrectError : t.passwordProtectedTitle);
+      } else {
+        const msg = err instanceof Error ? err.message : t.corruptedFileError;
+        onNotify('error', msg);
+        await onRecordHistory({
+          fileName: activeFile.name,
+          outputFileName: outputName,
+          toolId: 'pdf-to-word',
+          conversionType: t.tools['pdf-to-word'].name,
+          inputSize: activeFile.size,
+          outputSize: 0,
+          status: 'error',
+          note: msg,
+        });
+      }
     } finally {
+      abortRef.current = null;
       setProgress(null);
     }
   };
-
-  const outputName = activeFile ? `${stripExtension(activeFile.name)}.docx` : 'document.docx';
 
   return (
     <div className="space-y-6">
@@ -103,23 +142,47 @@ export const PdfToWordTool: React.FC<ToolProps> = ({
         onFilesAdded={(files) => {
           setItems([{id: generateId(), file: files[0]}]);
           setResult(null);
+          setPdfPassword(undefined);
+          setNeedsPassword(false);
+          setIncorrectPassword(false);
         }}
         onRemoveFile={() => {
+          abortRef.current?.abort();
           setItems([]);
           setResult(null);
+          setPdfPassword(undefined);
+          setNeedsPassword(false);
+          setIncorrectPassword(false);
         }}
         supportedLabel="PDF"
         onValidationError={(msg) => onNotify('error', msg)}
+        onInfo={(msg) => onNotify('info', msg)}
         uploadProgress={progress}
+        onCancelProcessing={() => abortRef.current?.abort()}
       />
 
       {activeFile && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-5">
+          {needsPassword && (
+            <PdfPasswordPrompt
+              t={t}
+              mode="unlock"
+              incorrectPassword={incorrectPassword}
+              fileName={activeFile.name}
+              onUnlock={(pw) => {
+                setPdfPassword(pw);
+                void runConvert(pw);
+              }}
+            />
+          )}
+
           <PdfThumbnailGrid
             file={activeFile}
             t={t}
             mode="preview"
             maxPreviewLimit={12}
+            password={pdfPassword}
+            onPasswordUnlocked={(pw) => setPdfPassword(pw)}
             onLoadError={(msg) => onNotify('error', msg)}
           />
 
@@ -127,7 +190,7 @@ export const PdfToWordTool: React.FC<ToolProps> = ({
             <button
               type="button"
               disabled={progress !== null}
-              onClick={handleConvert}
+              onClick={() => void runConvert()}
               className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60 transition-colors cursor-pointer"
             >
               {progress !== null && <Loader2 className="w-4 h-4 animate-spin" />}

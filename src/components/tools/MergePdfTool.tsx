@@ -1,10 +1,13 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {CheckCircle2, Download, Eye, Loader2, X} from 'lucide-react';
+import {useAccessibleDialog} from '../../hooks/useAccessibleDialog';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {mergePdfFiles} from '../../services/converters/mergePdf';
+import {isPdfEncryptedError} from '../../services/pdfEngine';
 import type {HistoryStatus, ToolId} from '../../types';
 import {downloadBlob, formatBytes, generateId, stripExtension} from '../../utils/format';
 import {FileUploadZone, type UploadedFileItem} from '../FileUploadZone';
+import {PdfPasswordPrompt} from '../PdfPasswordPrompt';
 import {PdfThumbnailGrid} from '../PdfThumbnailGrid';
 
 interface ToolProps {
@@ -33,10 +36,15 @@ export const MergePdfTool: React.FC<ToolProps> = ({
   const [progress, setProgress] = useState<number | null>(null);
   const [result, setResult] = useState<{blob: Blob; totalPages: number} | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [encryptedError, setEncryptedError] = useState(false);
+
+  const previewModalRef = useRef<HTMLDivElement>(null);
+  useAccessibleDialog(previewFile !== null, () => setPreviewFile(null), previewModalRef);
 
   useEffect(() => {
     if (initialFiles.length > 0) {
       setItems(initialFiles.map((file) => ({id: generateId(), file})));
+      setEncryptedError(false);
     }
   }, [initialFiles]);
 
@@ -61,15 +69,17 @@ export const MergePdfTool: React.FC<ToolProps> = ({
     }
     setProgress(10);
     setResult(null);
+    setEncryptedError(false);
+
+    const files = items.map((i) => i.file);
+    const totalInputSize = files.reduce((sum, f) => sum + f.size, 0);
 
     try {
-      const files = items.map((i) => i.file);
       const res = await mergePdfFiles(files, (curr, total) =>
         setProgress(Math.round((curr / total) * 100))
       );
       setResult(res);
 
-      const totalInputSize = files.reduce((sum, f) => sum + f.size, 0);
       await onRecordHistory({
         fileName: `${files[0].name} (+${files.length - 1})`,
         outputFileName: outputName,
@@ -82,8 +92,27 @@ export const MergePdfTool: React.FC<ToolProps> = ({
 
       onNotify('success', t.readyToDownload, `${outputName} (${res.totalPages} pages)`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t.corruptedFileError;
-      onNotify('error', msg);
+      const msg = isPdfEncryptedError(err)
+        ? t.passwordProtectedTitle
+        : err instanceof Error
+          ? err.message
+          : t.corruptedFileError;
+      if (isPdfEncryptedError(err)) {
+        setEncryptedError(true);
+        onNotify('error', t.passwordProtectedTitle, t.passwordProtectedLibBody);
+      } else {
+        onNotify('error', msg);
+      }
+      await onRecordHistory({
+        fileName: `${files[0].name} (+${files.length - 1})`,
+        outputFileName: outputName,
+        toolId: 'merge-pdf',
+        conversionType: t.tools['merge-pdf'].name,
+        inputSize: totalInputSize,
+        outputSize: 0,
+        status: 'error',
+        note: msg,
+      });
     } finally {
       setProgress(null);
     }
@@ -100,15 +129,18 @@ export const MergePdfTool: React.FC<ToolProps> = ({
         onFilesAdded={(files) => {
           setItems((prev) => [...prev, ...files.map((file) => ({id: generateId(), file}))]);
           setResult(null);
+          setEncryptedError(false);
         }}
         onRemoveFile={(id) => {
           setItems((prev) => prev.filter((i) => i.id !== id));
           setResult(null);
+          setEncryptedError(false);
         }}
         onMoveFile={handleMove}
         onClearAll={() => {
           setItems([]);
           setResult(null);
+          setEncryptedError(false);
         }}
         supportedLabel="PDF"
         reorderHint={t.mergeOrderHint}
@@ -118,6 +150,8 @@ export const MergePdfTool: React.FC<ToolProps> = ({
 
       {items.length > 0 && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-5">
+          {encryptedError && <PdfPasswordPrompt t={t} mode="unsupported" />}
+
           {/* Quick file preview switcher */}
           <div className="flex flex-wrap items-center gap-2">
             {items.map((item, idx) => (
@@ -182,13 +216,19 @@ export const MergePdfTool: React.FC<ToolProps> = ({
           onClick={() => setPreviewFile(null)}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="merge-preview-modal-title"
         >
           <div
-            className="w-full max-w-3xl max-h-[85vh] overflow-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-2xl"
+            ref={previewModalRef}
+            tabIndex={-1}
+            className="w-full max-w-3xl max-h-[85vh] overflow-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-2xl outline-none"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-4 mb-4">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+              <h3
+                id="merge-preview-modal-title"
+                className="text-sm font-semibold text-slate-900 dark:text-white truncate"
+              >
                 {previewFile.name}
               </h3>
               <button
@@ -200,7 +240,13 @@ export const MergePdfTool: React.FC<ToolProps> = ({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <PdfThumbnailGrid file={previewFile} t={t} mode="preview" maxPreviewLimit={16} />
+            <PdfThumbnailGrid
+              file={previewFile}
+              t={t}
+              mode="preview"
+              maxPreviewLimit={16}
+              allowPasswordUnlock={false}
+            />
           </div>
         </div>
       )}

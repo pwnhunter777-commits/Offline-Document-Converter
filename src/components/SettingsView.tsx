@@ -25,6 +25,7 @@ interface SettingsViewProps {
   historyCount: number;
   onClearHistory: () => Promise<void>;
   onClearCachedData: () => Promise<void>;
+  onFullOfflineReset: () => Promise<void>;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -36,9 +37,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   historyCount,
   onClearHistory,
   onClearCachedData,
+  onFullOfflineReset,
 }) => {
   const {isInstalled} = usePWAInstall();
-  const [confirmAction, setConfirmAction] = useState<'history' | 'cache' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'history' | 'cache' | 'fullReset' | null>(null);
 
   const themes: {id: ThemeMode; label: string; icon: React.ComponentType<{className?: string}>}[] = [
     {id: 'light', label: t.themeLight, icon: Sun},
@@ -169,6 +171,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900 dark:text-white">
+              {t.settingsFullResetBtn}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {t.settingsFullResetDesc}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setConfirmAction('fullReset')}
+            className="inline-flex items-center justify-center gap-2 min-h-[42px] px-4 py-2 rounded-xl border border-rose-200 dark:border-rose-900/70 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>{t.settingsFullResetBtn}</span>
+          </button>
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <Smartphone className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div>
@@ -217,8 +238,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <ConfirmDialog
         open={confirmAction !== null}
         message={
-          confirmAction === 'history' ? t.historyClearConfirm : t.settingsClearCacheConfirm
+          confirmAction === 'history'
+            ? t.historyClearConfirm
+            : confirmAction === 'fullReset'
+              ? t.settingsFullResetConfirm
+              : t.settingsClearCacheConfirm
         }
+        danger={confirmAction !== 'cache'}
         t={t}
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {
@@ -228,6 +254,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             void onClearHistory();
           } else if (action === 'cache') {
             void onClearCachedData();
+          } else if (action === 'fullReset') {
+            void onFullOfflineReset();
           }
         }}
       />

@@ -1,6 +1,5 @@
 {
   "name": "Offline Document Converter",
   "description": "Convert, edit, merge, and organize PDF, Word, and image documents completely offline inside your browser with 100% local privacy.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": []
 }

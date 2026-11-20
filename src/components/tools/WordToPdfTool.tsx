@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {CheckCircle2, Download, Loader2} from 'lucide-react';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {convertWordHtmlToPdf, extractWordPreview} from '../../services/converters/wordToPdf';
@@ -33,6 +33,7 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const loadDocx = async (file: File) => {
     setLoadingPreview(true);
@@ -58,6 +59,12 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFiles]);
 
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const activeFile = items[0]?.file ?? null;
   const outputName = activeFile ? `${stripExtension(activeFile.name)}.pdf` : 'document.pdf';
 
@@ -66,11 +73,17 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
       onNotify('error', t.noFilesSelected);
       return;
     }
+    const controller = new AbortController();
+    abortRef.current = controller;
     setProgress(10);
     setResultBlob(null);
 
     try {
-      const blob = await convertWordHtmlToPdf(previewHtml, (p) => setProgress(p));
+      const blob = await convertWordHtmlToPdf(
+        previewHtml,
+        (p) => setProgress(p),
+        controller.signal
+      );
       setResultBlob(blob);
 
       await onRecordHistory({
@@ -85,16 +98,30 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
 
       onNotify('success', t.readyToDownload, `${outputName} (${formatBytes(blob.size)})`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t.corruptedFileError;
-      onNotify('error', msg);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        onNotify('info', t.processingCancelled);
+      } else {
+        const msg = err instanceof Error ? err.message : t.corruptedFileError;
+        onNotify('error', msg);
+        await onRecordHistory({
+          fileName: activeFile.name,
+          outputFileName: outputName,
+          toolId: 'word-to-pdf',
+          conversionType: t.tools['word-to-pdf'].name,
+          inputSize: activeFile.size,
+          outputSize: 0,
+          status: 'error',
+          note: msg,
+        });
+      }
     } finally {
+      abortRef.current = null;
       setProgress(null);
     }
   };
 
   return (
     <div className="space-y-6">
-
       <FileUploadZone
         t={t}
         accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -106,13 +133,16 @@ export const WordToPdfTool: React.FC<ToolProps> = ({
           void loadDocx(files[0]);
         }}
         onRemoveFile={() => {
+          abortRef.current?.abort();
           setItems([]);
           setPreviewHtml('');
           setResultBlob(null);
         }}
         supportedLabel="DOCX"
         onValidationError={(msg) => onNotify('error', msg)}
+        onInfo={(msg) => onNotify('info', msg)}
         uploadProgress={progress}
+        onCancelProcessing={() => abortRef.current?.abort()}
       />
 
       {activeFile && (

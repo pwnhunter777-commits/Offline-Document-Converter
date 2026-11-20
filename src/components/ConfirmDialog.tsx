@@ -1,5 +1,6 @@
-import React from 'react';
+import React, {useRef} from 'react';
 import {AlertTriangle} from 'lucide-react';
+import {useAccessibleDialog} from '../hooks/useAccessibleDialog';
 import type {TranslationDictionary} from '../i18n/translations';
 
 interface ConfirmDialogProps {
@@ -23,6 +24,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onCancel,
   onConfirm,
 }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useAccessibleDialog(open, onCancel, panelRef);
+
   if (!open) return null;
 
   return (
@@ -30,8 +34,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="confirm-dialog-title"
+      onClick={() => {
+        if (!danger) onCancel();
+      }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl outline-none"
+      >
         <div className="flex items-start gap-3">
           <div
             className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
@@ -43,7 +56,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <AlertTriangle className="w-5 h-5" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+            <h3
+              id="confirm-dialog-title"
+              className="text-base font-semibold text-slate-900 dark:text-white"
+            >
               {title ?? t.confirmTitle}
             </h3>
             <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">

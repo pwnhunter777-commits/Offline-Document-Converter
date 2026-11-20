@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {
   Clock,
   FileText,
@@ -41,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   onThemeChange,
   isOnline,
 }) => {
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
   const cycleTheme = () => {
     const order: ThemeMode[] = ['light', 'dark', 'system'];
     const next = order[(order.indexOf(theme) + 1) % order.length];
@@ -54,17 +56,17 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-4 lg:gap-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4 lg:gap-8">
           {/* Zone 1: Brand mark */}
           <button
             type="button"
             onClick={() => onNavigate('dashboard')}
-            className="flex items-center gap-2.5 text-left min-w-0 shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 rounded-lg"
+            className="flex items-center gap-2 text-left min-w-0 shrink cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 rounded-lg"
           >
             <span className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
               <FileText className="w-4 h-4" />
             </span>
-            <span className="font-display font-bold text-base sm:text-lg tracking-tight text-slate-900 dark:text-white whitespace-nowrap truncate max-w-[190px] sm:max-w-none">
+            <span className="font-display font-bold text-sm sm:text-lg tracking-tight text-slate-900 dark:text-white whitespace-nowrap truncate max-w-[130px] sm:max-w-none">
               {t.appName}
             </span>
           </button>
@@ -135,8 +137,22 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Zone 3: Language, Theme, Settings & Install */}
+          {/* Zone 3: Mobile Search, Language, Theme, Settings & Install */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setMobileSearchOpen((v) => !v)}
+              aria-label={t.searchPlaceholder}
+              aria-expanded={mobileSearchOpen}
+              className={`md:hidden inline-flex items-center justify-center min-h-[40px] min-w-[40px] rounded-lg border transition-colors shrink-0 cursor-pointer ${
+                mobileSearchOpen
+                  ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
             <button
               type="button"
               onClick={() => onLanguageChange(language === 'en' ? 'ta' : 'en')}
@@ -173,11 +189,42 @@ export const Header: React.FC<HeaderProps> = ({
               <Settings className="w-4 h-4" />
             </button>
 
-            <div className="hidden sm:block">
-              <PWAInstallButton t={t} />
-            </div>
+            <PWAInstallButton t={t} />
           </div>
         </div>
+
+        {/* Expandable mobile search bar */}
+        {mobileSearchOpen && (
+          <div className="md:hidden border-t border-slate-200 dark:border-slate-800 px-4 py-2.5 bg-white dark:bg-slate-900">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => {
+                  onSearchChange(e.target.value);
+                  if (activeView !== 'dashboard') {
+                    onNavigate('dashboard');
+                  }
+                }}
+                placeholder={t.searchPlaceholder}
+                aria-label={t.searchPlaceholder}
+                className="w-full h-10 pl-9 pr-8 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => onSearchChange('')}
+                  aria-label={t.clearSearch}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Real Offline Indicator Banner (shown strictly when navigator.onLine is false) */}
         {!isOnline && (

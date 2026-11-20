@@ -1,4 +1,5 @@
 import {PDFDocument} from 'pdf-lib';
+import {yieldToMainThread} from '../pdfEngine';
 
 export type PageSizeOption = 'a4' | 'letter' | 'legal' | 'fit';
 export type OrientationOption = 'portrait' | 'landscape' | 'auto';
@@ -25,15 +26,42 @@ const MARGIN_PT: Record<MarginOption, number> = {
   large: 85.04, // 30mm
 };
 
-async function loadImageElement(file: File): Promise<HTMLImageElement> {
+interface DecodedImageSource {
+  source: ImageBitmap | HTMLImageElement;
+  width: number;
+  height: number;
+  cleanup: () => void;
+}
+
+async function decodeImageWithExifOrientation(file: File): Promise<DecodedImageSource> {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, {imageOrientation: 'from-image'});
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        cleanup: () => bitmap.close(),
+      };
+    } catch {
+      // Fallback to HTMLImageElement below
+    }
+  }
+
   const url = URL.createObjectURL(file);
   try {
-    return await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Unable to decode image: ${file.name}`));
-      img.src = url;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error(`Unable to decode image: ${file.name}`));
+      el.src = url;
     });
+    return {
+      source: img,
+      width: img.naturalWidth || img.width,
+      height: img.naturalHeight || img.height,
+      cleanup: () => {},
+    };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -44,73 +72,89 @@ async function imageFileToEmbeddedBytes(
   cropAspect?: number,
   forceCanvas = false
 ): Promise<{bytes: Uint8Array; isPng: boolean; width: number; height: number}> {
-  const img = await loadImageElement(file);
-  const srcW = img.naturalWidth || img.width;
-  const srcH = img.naturalHeight || img.height;
+  const decoded = await decodeImageWithExifOrientation(file);
+  try {
+    const srcW = decoded.width;
+    const srcH = decoded.height;
 
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-  const needsCanvasConversion =
-    forceCanvas || ext === 'webp' || file.type === 'image/webp' || cropAspect !== undefined;
-
-  if (!needsCanvasConversion) {
-    const buffer = await file.arrayBuffer();
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     const isPng = ext === 'png' || file.type === 'image/png';
-    return {
-      bytes: new Uint8Array(buffer),
-      isPng,
-      width: srcW,
-      height: srcH,
-    };
-  }
+    const isJpeg = ext === 'jpg' || ext === 'jpeg' || file.type === 'image/jpeg';
 
-  let sx = 0;
-  let sy = 0;
-  let sw = srcW;
-  let sh = srcH;
+    // Always draw JPEGs and WebP through canvas so EXIF orientation is baked into upright pixels
+    const needsCanvasConversion =
+      forceCanvas ||
+      isJpeg ||
+      ext === 'webp' ||
+      file.type === 'image/webp' ||
+      cropAspect !== undefined;
 
-  if (cropAspect !== undefined && srcW > 0 && srcH > 0) {
-    const currentAspect = srcW / srcH;
-    if (currentAspect > cropAspect) {
-      sw = Math.round(srcH * cropAspect);
-      sx = Math.round((srcW - sw) / 2);
-    } else if (currentAspect < cropAspect) {
-      sh = Math.round(srcW / cropAspect);
-      sy = Math.round((srcH - sh) / 2);
+    if (!needsCanvasConversion) {
+      const buffer = await file.arrayBuffer();
+      return {
+        bytes: new Uint8Array(buffer),
+        isPng,
+        width: srcW,
+        height: srcH,
+      };
     }
+
+    let sx = 0;
+    let sy = 0;
+    let sw = srcW;
+    let sh = srcH;
+
+    if (cropAspect !== undefined && srcW > 0 && srcH > 0) {
+      const currentAspect = srcW / srcH;
+      if (currentAspect > cropAspect) {
+        sw = Math.round(srcH * cropAspect);
+        sx = Math.round((srcW - sw) / 2);
+      } else if (currentAspect < cropAspect) {
+        sh = Math.round(srcW / cropAspect);
+        sy = Math.round((srcH - sh) / 2);
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, sw);
+    canvas.height = Math.max(1, sh);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas 2D context unavailable.');
+    }
+
+    if (!isPng) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(decoded.source, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+    const mime = isPng ? 'image/png' : 'image/jpeg';
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Failed to encode image for PDF.'))),
+        mime,
+        0.92
+      );
+    });
+
+    const width = canvas.width;
+    const height = canvas.height;
+    canvas.width = 0;
+    canvas.height = 0;
+
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    return {bytes, isPng, width, height};
+  } finally {
+    decoded.cleanup();
   }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, sw);
-  canvas.height = Math.max(1, sh);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Canvas 2D context unavailable.');
-  }
-
-  const isPng = ext === 'png' || file.type === 'image/png';
-  if (!isPng) {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-
-  const mime = isPng ? 'image/png' : 'image/jpeg';
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error('Failed to encode image for PDF.'))),
-      mime,
-      0.92
-    );
-  });
-
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  return {bytes, isPng, width: canvas.width, height: canvas.height};
 }
 
 export async function convertImagesToPdf(
   files: File[],
   options: ImageToPdfOptions,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<Blob> {
   if (files.length === 0) {
     throw new Error('No images selected.');
@@ -120,10 +164,15 @@ export async function convertImagesToPdf(
   const margin = options.pageSize === 'fit' ? 0 : MARGIN_PT[options.margin];
 
   for (let i = 0; i < files.length; i++) {
+    if (signal?.aborted) {
+      throw new DOMException('Operation cancelled', 'AbortError');
+    }
+
     const file = files[i];
-    const imgEl = await loadImageElement(file);
-    const natW = imgEl.naturalWidth || imgEl.width;
-    const natH = imgEl.naturalHeight || imgEl.height;
+    const decoded = await decodeImageWithExifOrientation(file);
+    const natW = decoded.width;
+    const natH = decoded.height;
+    decoded.cleanup();
 
     let pageWidth: number;
     let pageHeight: number;
@@ -195,6 +244,7 @@ export async function convertImagesToPdf(
     });
 
     onProgress?.(i + 1, files.length);
+    await yieldToMainThread();
   }
 
   const pdfBytes = await pdfDoc.save();

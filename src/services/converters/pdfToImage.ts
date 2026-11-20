@@ -1,6 +1,11 @@
 import JSZip from 'jszip';
 import {stripExtension} from '../../utils/format';
-import {destroyPdfDocument, loadPdfDocument, renderPdfPageToBlob} from '../pdfEngine';
+import {
+  destroyPdfDocument,
+  loadPdfDocument,
+  renderPdfPageToBlob,
+  yieldToMainThread,
+} from '../pdfEngine';
 
 export type ImageOutputFormat = 'png' | 'jpeg';
 
@@ -20,10 +25,12 @@ export async function convertPdfPagesToImages(
     quality: number;
     scale: number;
   },
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  password?: string,
+  signal?: AbortSignal
 ): Promise<RenderedPdfImage[]> {
   const buffer = await file.arrayBuffer();
-  const pdfDoc = await loadPdfDocument(buffer);
+  const pdfDoc = await loadPdfDocument(buffer, password);
   const baseName = stripExtension(file.name);
   const ext = options.format === 'png' ? 'png' : 'jpg';
   const mime = options.format === 'png' ? 'image/png' : 'image/jpeg';
@@ -31,6 +38,9 @@ export async function convertPdfPagesToImages(
   try {
     const results: RenderedPdfImage[] = [];
     for (let i = 0; i < pageNumbers.length; i++) {
+      if (signal?.aborted) {
+        throw new DOMException('Operation cancelled', 'AbortError');
+      }
       const pageNum = pageNumbers[i];
       const rendered = await renderPdfPageToBlob(
         pdfDoc,
@@ -47,6 +57,7 @@ export async function convertPdfPagesToImages(
         blob: rendered.blob,
       });
       onProgress?.(i + 1, pageNumbers.length);
+      await yieldToMainThread();
     }
     return results;
   } finally {

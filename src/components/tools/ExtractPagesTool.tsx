@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {CheckCircle2, Download, Loader2} from 'lucide-react';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {extractPdfPages} from '../../services/converters/extractPdfPages';
+import {isPdfEncryptedError} from '../../services/pdfEngine';
 import type {HistoryStatus, ToolId} from '../../types';
 import {
   downloadBlob,
@@ -11,6 +12,7 @@ import {
   stripExtension,
 } from '../../utils/format';
 import {FileUploadZone, type UploadedFileItem} from '../FileUploadZone';
+import {PdfPasswordPrompt} from '../PdfPasswordPrompt';
 import {PdfThumbnailGrid} from '../PdfThumbnailGrid';
 
 interface ToolProps {
@@ -39,12 +41,16 @@ export const ExtractPagesTool: React.FC<ToolProps> = ({
   const [totalPages, setTotalPages] = useState(0);
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [rangeText, setRangeText] = useState('');
+  const [encryptedError, setEncryptedError] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     if (initialFiles.length > 0) {
       setItems([{id: generateId(), file: initialFiles[0]}]);
+      setSelectedPages([]);
+      setRangeText('');
+      setEncryptedError(false);
     }
   }, [initialFiles]);
 
@@ -119,8 +125,33 @@ export const ExtractPagesTool: React.FC<ToolProps> = ({
 
       onNotify('success', t.readyToDownload, `${outputName} (${targets.length} pages)`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t.corruptedFileError;
-      onNotify('error', msg);
+      if (isPdfEncryptedError(err)) {
+        setEncryptedError(true);
+        onNotify('error', t.passwordProtectedTitle, t.passwordProtectedLibBody);
+        await onRecordHistory({
+          fileName: activeFile.name,
+          outputFileName: outputName,
+          toolId: 'extract-pages',
+          conversionType: t.tools['extract-pages'].name,
+          inputSize: activeFile.size,
+          outputSize: 0,
+          status: 'error',
+          note: t.passwordProtectedTitle,
+        });
+      } else {
+        const msg = err instanceof Error ? err.message : t.corruptedFileError;
+        onNotify('error', msg);
+        await onRecordHistory({
+          fileName: activeFile.name,
+          outputFileName: outputName,
+          toolId: 'extract-pages',
+          conversionType: t.tools['extract-pages'].name,
+          inputSize: activeFile.size,
+          outputSize: 0,
+          status: 'error',
+          note: msg,
+        });
+      }
     } finally {
       setProgress(null);
     }
@@ -138,6 +169,7 @@ export const ExtractPagesTool: React.FC<ToolProps> = ({
           setItems([{id: generateId(), file: files[0]}]);
           setSelectedPages([]);
           setRangeText('');
+          setEncryptedError(false);
           setResultBlob(null);
           setTotalPages(0);
         }}
@@ -145,101 +177,110 @@ export const ExtractPagesTool: React.FC<ToolProps> = ({
           setItems([]);
           setSelectedPages([]);
           setRangeText('');
+          setEncryptedError(false);
           setResultBlob(null);
           setTotalPages(0);
         }}
         supportedLabel="PDF"
         onValidationError={(msg) => onNotify('error', msg)}
+        onInfo={(msg) => onNotify('info', msg)}
         uploadProgress={progress}
       />
 
       {activeFile && (
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sm:p-6 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div className="flex-1 max-w-md">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                {t.extractRangeLabel}
-              </label>
-              <input
-                type="text"
-                value={rangeText}
-                onChange={(e) => handleRangeChange(e.target.value)}
-                placeholder={t.extractRangePlaceholder}
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
-              />
-            </div>
+          {encryptedError ? (
+            <PdfPasswordPrompt t={t} mode="unsupported" fileName={activeFile.name} />
+          ) : (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div className="flex-1 max-w-md">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+                    {t.extractRangeLabel}
+                  </label>
+                  <input
+                    type="text"
+                    value={rangeText}
+                    onChange={(e) => handleRangeChange(e.target.value)}
+                    placeholder={t.extractRangePlaceholder}
+                    className="w-full h-11 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
 
-            {totalPages > 0 && (
-              <div className="flex items-center gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const all = Array.from({length: totalPages}, (_, i) => i + 1);
-                    setSelectedPages(all);
-                    setRangeText(`1-${totalPages}`);
-                    setResultBlob(null);
-                  }}
-                  className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  {t.selectAll}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPages([]);
-                    setRangeText('');
-                    setResultBlob(null);
-                  }}
-                  className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  {t.deselectAll}
-                </button>
+                {totalPages > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const all = Array.from({length: totalPages}, (_, i) => i + 1);
+                        setSelectedPages(all);
+                        setRangeText(`1-${totalPages}`);
+                        setResultBlob(null);
+                      }}
+                      className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                    >
+                      {t.selectAll}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPages([]);
+                        setRangeText('');
+                        setResultBlob(null);
+                      }}
+                      className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                    >
+                      {t.deselectAll}
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <p className="text-xs text-slate-500 dark:text-slate-400">{t.extractPagesHint}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t.extractPagesHint}</p>
 
-          <PdfThumbnailGrid
-            file={activeFile}
-            t={t}
-            mode="select"
-            selectedPages={selectedPages}
-            onTogglePage={handleTogglePage}
-            onPageCountLoaded={setTotalPages}
-            onLoadError={(msg) => onNotify('error', msg)}
-          />
+              <PdfThumbnailGrid
+                file={activeFile}
+                t={t}
+                mode="select"
+                selectedPages={selectedPages}
+                onTogglePage={handleTogglePage}
+                onPageCountLoaded={setTotalPages}
+                allowPasswordUnlock={false}
+                onLoadError={(msg) => onNotify('error', msg)}
+              />
 
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              type="button"
-              disabled={progress !== null || selectedPages.length === 0}
-              onClick={handleExtract}
-              className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {progress !== null && <Loader2 className="w-4 h-4 animate-spin" />}
-              <span>{t.tools['extract-pages'].actionLabel}</span>
-            </button>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={progress !== null || selectedPages.length === 0}
+                  onClick={handleExtract}
+                  className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {progress !== null && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{t.tools['extract-pages'].actionLabel}</span>
+                </button>
 
-            {resultBlob && (
-              <button
-                type="button"
-                onClick={() => downloadBlob(resultBlob, outputName)}
-                className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>
-                  {t.downloadResult} ({formatBytes(resultBlob.size)})
-                </span>
-              </button>
-            )}
-          </div>
+                {resultBlob && (
+                  <button
+                    type="button"
+                    onClick={() => downloadBlob(resultBlob, outputName)}
+                    className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>
+                      {t.downloadResult} ({formatBytes(resultBlob.size)})
+                    </span>
+                  </button>
+                )}
+              </div>
 
-          {resultBlob && (
-            <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{t.readyToDownload}</span>
-            </div>
+              {resultBlob && (
+                <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{t.readyToDownload}</span>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

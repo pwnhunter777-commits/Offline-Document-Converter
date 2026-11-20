@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {CheckCircle2, Download, Loader2, RotateCcw} from 'lucide-react';
 import type {TranslationDictionary} from '../../i18n/translations';
 import {
@@ -42,6 +42,7 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
   const [progress, setProgress] = useState<number | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [outputName, setOutputName] = useState('images_converted.pdf');
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (initialFiles.length > 0) {
@@ -49,6 +50,12 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFiles]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const addFiles = (newFiles: File[]) => {
     const mapped: UploadedFileItem[] = newFiles.map((file) => ({
@@ -85,25 +92,31 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
       onNotify('error', t.noFilesSelected);
       return;
     }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
     setProgress(5);
     setResultBlob(null);
 
+    const files = items.map((i) => i.file);
+    const totalInputSize = files.reduce((sum, f) => sum + f.size, 0);
+    const firstBase = stripExtension(files[0].name);
+    const outName = files.length === 1 ? `${firstBase}.pdf` : `${firstBase}_and_${files.length - 1}_more.pdf`;
+    const fileLabel = files.length === 1 ? files[0].name : `${files[0].name} (+${files.length - 1})`;
+
     try {
-      const files = items.map((i) => i.file);
       const blob = await convertImagesToPdf(
         files,
         {pageSize, orientation, margin, imageFit},
-        (curr, total) => setProgress(Math.round((curr / total) * 100))
+        (curr, total) => setProgress(Math.round((curr / total) * 100)),
+        controller.signal
       );
 
-      const firstBase = stripExtension(files[0].name);
-      const outName = files.length === 1 ? `${firstBase}.pdf` : `${firstBase}_and_${files.length - 1}_more.pdf`;
       setOutputName(outName);
       setResultBlob(blob);
 
-      const totalInputSize = files.reduce((sum, f) => sum + f.size, 0);
       await onRecordHistory({
-        fileName: files.length === 1 ? files[0].name : `${files[0].name} (+${files.length - 1})`,
+        fileName: fileLabel,
         outputFileName: outName,
         toolId: 'image-to-pdf',
         conversionType: t.tools['image-to-pdf'].name,
@@ -114,9 +127,24 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
 
       onNotify('success', t.readyToDownload, `${outName} (${formatBytes(blob.size)})`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : t.corruptedFileError;
-      onNotify('error', msg);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        onNotify('info', t.processingCancelled);
+      } else {
+        const msg = err instanceof Error ? err.message : t.corruptedFileError;
+        onNotify('error', msg);
+        await onRecordHistory({
+          fileName: fileLabel,
+          outputFileName: outName,
+          toolId: 'image-to-pdf',
+          conversionType: t.tools['image-to-pdf'].name,
+          inputSize: totalInputSize,
+          outputSize: 0,
+          status: 'error',
+          note: msg,
+        });
+      }
     } finally {
+      abortRef.current = null;
       setProgress(null);
     }
   };
@@ -136,7 +164,9 @@ export const ImageToPdfTool: React.FC<ToolProps> = ({
         supportedLabel="JPG, JPEG, PNG, WEBP"
         reorderHint={t.imgReorderHint}
         onValidationError={(msg) => onNotify('error', msg)}
+        onInfo={(msg) => onNotify('info', msg)}
         uploadProgress={progress}
+        onCancelProcessing={() => abortRef.current?.abort()}
       />
 
       {items.length > 0 && (

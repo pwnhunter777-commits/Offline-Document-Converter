@@ -193,6 +193,9 @@ export interface TranslationDictionary {
   settingsClearCacheDesc: string;
   settingsClearCacheConfirm: string;
   settingsCacheCleared: string;
+  settingsFullResetBtn: string;
+  settingsFullResetDesc: string;
+  settingsFullResetConfirm: string;
   settingsPrivacyTitle: string;
   settingsPrivacyBody: string;
   settingsAboutTitle: string;
@@ -204,6 +207,31 @@ export interface TranslationDictionary {
   quickSelectTitle: string;
   quickSelectSubtitle: string;
   quickSelectChooseTool: string;
+  quickSelectMixedError: string;
+  // Phase 2: Pagination, compress warning, password PDFs
+  showingPagesPrefix: string;
+  showingPagesOf: string;
+  showingPagesSuffix: string;
+  loadMorePages: string;
+  pageRangeInputLabel: string;
+  pageRangePlaceholder: string;
+  compressRasterWarningTitle: string;
+  compressRasterWarningBody: string;
+  compressDownloadAnyway: string;
+  passwordProtectedTitle: string;
+  passwordProtectedLibBody: string;
+  passwordProtectedJsBody: string;
+  passwordInputPlaceholder: string;
+  passwordUnlockBtn: string;
+  passwordIncorrectError: string;
+  // Phase 3: UX, accessibility, navigation, cancellation, history export
+  singleFileOnlyUsed: string;
+  confirmLargeFileMessage: string;
+  imgExportingAllPages: string;
+  historyExportJson: string;
+  historyActionFailed: string;
+  cancelProcessing: string;
+  processingCancelled: string;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -352,7 +380,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     imgReorderHint: 'Use the arrows to arrange the page order before creating your PDF.',
     pdfToWordNoticeTitle: 'Local Text Reconstruction',
     pdfToWordNoticeBody:
-      'Browser-based PDF-to-Word preserves text, detected headings, paragraphs, and basic bold/italic styles. Complex multi-column layouts, vector diagrams, and embedded tables cannot be reproduced identically without server OCR.',
+      'Browser-based PDF-to-Word preserves extracted text, detected headings, paragraphs, bullet lists (• / –), embedded page images, and bold/italic formatting when present in PDF font metadata. Complex multi-column layouts, tables, vector diagrams, and scanned pages without an embedded text layer cannot be reproduced identically without server OCR.',
     pdfToWordScannedWarning:
       'Very little selectable text was detected. This PDF may be scanned or image-based—local extraction only reads embedded text layers.',
     pdfToWordExtractedPreview: 'Extracted Document Preview',
@@ -361,7 +389,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     wordToPdfNotice:
       'Headings, paragraphs, lists, tables, and embedded images are rendered locally into paginated A4 PDF pages.',
     wordToPdfConverting: 'Rendering formatted document pages...',
-    mergeOrderHint: 'Drag or use arrows to reorder PDFs. Pages are combined from top to bottom.',
+    mergeOrderHint: 'Use the arrows to reorder PDFs. Pages are combined from top to bottom.',
     mergeTotalFiles: 'files ready',
     mergeNeedTwo: 'Upload at least 2 PDF files to merge them.',
     splitModeLabel: 'Split Method',
@@ -432,13 +460,17 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     settingsDataTitle: 'Local Storage & Cache',
     settingsClearHistoryBtn: 'Clear Conversion History',
     settingsClearHistoryDesc: 'Deletes all saved file metadata entries from IndexedDB on this device.',
-    settingsClearCacheBtn: 'Clear Cached App Data',
-    settingsClearCacheDesc: 'Clears offline Service Worker caches and resets local preferences.',
-    settingsClearCacheConfirm: 'Clear cached offline application data? You will need an internet connection once to reload cached assets.',
-    settingsCacheCleared: 'Cached application data cleared.',
+    settingsClearCacheBtn: 'Reset App Preferences',
+    settingsClearCacheDesc: 'Resets saved theme and language preferences while keeping offline app files cached.',
+    settingsClearCacheConfirm: 'Reset saved theme and language preferences to defaults? Offline cached files will be kept.',
+    settingsCacheCleared: 'App preferences reset to defaults.',
+    settingsFullResetBtn: 'Full Offline Cache Reset & Reload',
+    settingsFullResetDesc: 'Unregisters the service worker, deletes cached offline files, and reloads the page.',
+    settingsFullResetConfirm:
+      'Warning: This deletes all offline cached app files and unregisters the service worker. An internet connection is required to reload the app.',
     settingsPrivacyTitle: 'Privacy & Security Guarantee',
     settingsPrivacyBody:
-      'Offline Document Converter executes every PDF, Word, and image operation directly in your device RAM via WebAssembly and JavaScript. No file is ever transmitted over the network, no user account exists, and no third-party analytics or external document APIs are used.',
+      'Offline Document Converter executes every PDF, Word, and image operation directly in your device memory using client-side JavaScript, Web Workers, and HTML5 Canvas. No file is ever transmitted over the network, no user account exists, and no third-party analytics or external document APIs are used.',
     settingsAboutTitle: 'About Offline Document Converter',
     settingsAboutBody:
       'Built as an installable Progressive Web App with bundled pdf-lib, jsPDF, pdf.js, mammoth.js, docx, and JSZip engines for uninterrupted offline productivity.',
@@ -448,6 +480,33 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     quickSelectTitle: 'Choose a Tool for Your File',
     quickSelectSubtitle: 'Select an operation to open directly with your chosen file.',
     quickSelectChooseTool: 'Open in',
+    quickSelectMixedError: 'Select only PDFs, only images, or one .docx file.',
+    showingPagesPrefix: 'Showing',
+    showingPagesOf: 'of',
+    showingPagesSuffix: 'pages',
+    loadMorePages: 'Load more',
+    pageRangeInputLabel: 'Or enter pages / ranges',
+    pageRangePlaceholder: 'e.g. 1, 3-5, 65',
+    compressRasterWarningTitle: 'Raster compression converts pages into images',
+    compressRasterWarningBody:
+      'Low, Medium, and High modes render every page as a JPEG image. Text will no longer be selectable, and links, bookmarks, and form fields will be removed. Use Lossless mode to keep vector text and links intact.',
+    compressDownloadAnyway: 'Download anyway',
+    passwordProtectedTitle: 'This PDF is password-protected',
+    passwordProtectedLibBody:
+      'This PDF is password-protected and must be unlocked before modifying or reorganizing its pages.',
+    passwordProtectedJsBody:
+      'Enter the document password to unlock it locally in your browser.',
+    passwordInputPlaceholder: 'Enter PDF password',
+    passwordUnlockBtn: 'Unlock PDF',
+    passwordIncorrectError: 'Incorrect password. Please try again.',
+    singleFileOnlyUsed: 'Only the first file was used for this single-file tool.',
+    confirmLargeFileMessage:
+      'This file is larger than 100 MB. Rendering every page locally may use significant browser memory and take longer. Continue anyway?',
+    imgExportingAllPages: 'Exporting: all pages',
+    historyExportJson: 'Export history (JSON)',
+    historyActionFailed: 'Could not update local conversion history.',
+    cancelProcessing: 'Cancel',
+    processingCancelled: 'Processing cancelled.',
   },
   ta: {
     appName: 'ஆஃப்லைன் ஆவண மாற்றி',
@@ -594,7 +653,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     imgReorderHint: 'PDF உருவாக்கும் முன் பக்க வரிசையை அமைக்க அம்புக்குறிகளைப் பயன்படுத்தவும்.',
     pdfToWordNoticeTitle: 'உள்ளூர் உரை மறுகட்டமைப்பு',
     pdfToWordNoticeBody:
-      'உலாவி அடிப்படையிலான PDF-இலிருந்து Word மாற்றம் உரை, தலைப்புகள், பத்திகள் மற்றும் அடிப்படை தடித்த/சாய்வு எழுத்து வடிவங்களைப் பாதுகாக்கிறது. சிக்கலான பல-நெடுவரிசை அமைப்புகள் மற்றும் வரைபடங்களை சேவையக OCR இல்லாமல் துல்லியமாக மாற்ற முடியாது.',
+      'உலாவி அடிப்படையிலான PDF-இலிருந்து Word மாற்றம் பிரித்தெடுக்கப்பட்ட உரை, கண்டறியப்பட்ட தலைப்புகள், பத்திகள், புல்லட் பட்டியல்கள் (• / –), உள்ளமைக்கப்பட்ட படங்கள் மற்றும் PDF எழுத்துரு மெட்டாடேட்டாவில் உள்ள தடித்த/சாய்வு வடிவங்களைப் பாதுகாக்கிறது. சிக்கலான பல-நெடுவரிசை அமைப்புகள், அட்டவணைகள், வரைபடங்கள் மற்றும் உரை அடுக்கில்லாத ஸ்கேன் செய்யப்பட்ட பக்கங்களை சேவையக OCR இல்லாமல் துல்லியமாக மாற்ற முடியாது.',
     pdfToWordScannedWarning:
       'மிகக் குறைந்த உரையே கண்டறியப்பட்டது. இது ஸ்கேன் செய்யப்பட்ட PDF ஆக இருக்கலாம்—உள்ளூர் செயலாக்கம் உள்ளமைக்கப்பட்ட உரை அடுக்குகளை மட்டுமே படிக்கும்.',
     pdfToWordExtractedPreview: 'பிரித்தெடுக்கப்பட்ட உரை முன்னோட்டம்',
@@ -674,13 +733,17 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     settingsDataTitle: 'உள்ளூர் சேமிப்பு & தற்காலிக சேமிப்பு',
     settingsClearHistoryBtn: 'மாற்ற வரலாற்றை அழி',
     settingsClearHistoryDesc: 'இந்தச் சாதனத்தில் சேமிக்கப்பட்ட அனைத்து கோப்பு வரலாறுகளையும் நீக்குகிறது.',
-    settingsClearCacheBtn: 'தற்காலிக பயன்பாட்டுத் தரவை அழி',
-    settingsClearCacheDesc: 'ஆஃப்லைன் Service Worker தற்காலிக சேமிப்பை அழித்து விருப்பங்களை மீட்டமைக்கிறது.',
-    settingsClearCacheConfirm: 'ஆஃப்லைன் பயன்பாட்டுத் தரவை அழிக்கவா? சொத்துக்களை மீண்டும் சேமிக்க ஒருமுறை இணைய இணைப்பு தேவைப்படும்.',
-    settingsCacheCleared: 'தற்காலிக பயன்பாட்டுத் தரவு அழிக்கப்பட்டது.',
+    settingsClearCacheBtn: 'செயலி விருப்பங்களை மீட்டமை',
+    settingsClearCacheDesc: 'ஆஃப்லைன் கோப்புகளைப் பாதுகாத்து, தீம் மற்றும் மொழி விருப்பங்களை மட்டும் மீட்டமைக்கிறது.',
+    settingsClearCacheConfirm: 'சேமிக்கப்பட்ட தீம் மற்றும் மொழி விருப்பங்களை இயல்புநிலைக்கு மீட்டமைக்கவா? ஆஃப்லைன் சேமிப்பு பாதுகாக்கப்படும்.',
+    settingsCacheCleared: 'செயலி விருப்பங்கள் மீட்டமைக்கப்பட்டன.',
+    settingsFullResetBtn: 'முழு ஆஃப்லைன் சேமிப்பு நீக்கம் & மறுஏற்றம்',
+    settingsFullResetDesc: 'Service Worker-ஐ நீக்கி, ஆஃப்லைன் தற்காலிக கோப்புகளை அழித்து பக்கத்தை மீண்டும் ஏற்றுகிறது.',
+    settingsFullResetConfirm:
+      'எச்சரிக்கை: இது அனைத்து ஆஃப்லைன் தற்காலிக கோப்புகளையும் அழித்து Service Worker-ஐ நீக்கும். செயலியை மீண்டும் ஏற்ற இணைய இணைப்பு தேவைப்படும்.',
     settingsPrivacyTitle: 'தனியுரிமை & பாதுகாப்பு உத்தரவாதம்',
     settingsPrivacyBody:
-      'ஆஃப்லைன் ஆவண மாற்றி அனைத்து PDF, Word மற்றும் பட செயலாக்கங்களையும் உங்கள் சாதனத்தின் நினைவகத்திலேயே WebAssembly மற்றும் JavaScript மூலம் செயல்படுத்துகிறது. எந்தக் கோப்பும் இணையத்தில் அனுப்பப்படுவதில்லை.',
+      'ஆஃப்லைன் ஆவண மாற்றி அனைத்து PDF, Word மற்றும் பட செயலாக்கங்களையும் உங்கள் சாதனத்தின் நினைவகத்திலேயே உலாவி JavaScript, Web Workers மற்றும் Canvas மூலம் செயல்படுத்துகிறது. எந்தக் கோப்பும் இணையத்தில் அனுப்பப்படுவதில்லை, பயனர் கணக்கோ மூன்றாம் தரப்பு பகுப்பாய்வோ பயன்படுத்தப்படுவதில்லை.',
     settingsAboutTitle: 'ஆஃப்லைன் ஆவண மாற்றி பற்றி',
     settingsAboutBody:
       'pdf-lib, jsPDF, pdf.js, mammoth.js, docx மற்றும் JSZip ஆகியவற்றுடன் இணையமின்றி செயல்பட வடிவமைக்கப்பட்ட Progressive Web App.',
@@ -690,5 +753,32 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
     quickSelectTitle: 'உங்கள் கோப்பிற்கான கருவியைத் தேர்ந்தெடுக்கவும்',
     quickSelectSubtitle: 'தேர்ந்தெடுத்த கோப்பைத் திறக்க விரும்பும் கருவியைக் கிளிக் செய்யவும்.',
     quickSelectChooseTool: 'திற:',
+    quickSelectMixedError: 'PDF-கள் மட்டும், படங்கள் மட்டும் அல்லது ஒரு .docx கோப்பை மட்டும் தேர்ந்தெடுக்கவும்.',
+    showingPagesPrefix: 'மொத்த',
+    showingPagesOf: 'பக்கங்களில்',
+    showingPagesSuffix: 'பக்கங்கள் காட்டப்படுகின்றன',
+    loadMorePages: 'மேலும் பக்கங்களை ஏற்று',
+    pageRangeInputLabel: 'அல்லது பக்கங்கள் / வரம்புகளை உள்ளிடவும்',
+    pageRangePlaceholder: 'எ.கா. 1, 3-5, 65',
+    compressRasterWarningTitle: 'பட-அடிப்படை சுருக்கம் பக்கங்களைப் படங்களாக மாற்றும்',
+    compressRasterWarningBody:
+      'குறைந்த, நடுத்தர மற்றும் அதிக சுருக்க நிலைகள் ஒவ்வொரு பக்கத்தையும் JPEG படமாக மாற்றுகின்றன. உரையைத் தேர்ந்தெடுக்க முடியாது, மேலும் இணைப்புகள் மற்றும் படிவப் புலங்கள் நீக்கப்படும். உரை மற்றும் இணைப்புகளைப் பாதுகாக்க இழப்பற்ற முறையைப் பயன்படுத்தவும்.',
+    compressDownloadAnyway: 'எப்படியும் பதிவிறக்கு',
+    passwordProtectedTitle: 'இந்த PDF கடவுச்சொல் மூலம் பாதுகாக்கப்பட்டுள்ளது',
+    passwordProtectedLibBody:
+      'இந்த PDF கடவுச்சொல் மூலம் பூட்டப்பட்டுள்ளது. பக்கங்களை மாற்றுவதற்கு முன் இது திறக்கப்பட்டிருக்க வேண்டும்.',
+    passwordProtectedJsBody:
+      'உங்கள் உலாவியிலேயே உள்ளூரில் திறக்க ஆவணத்தின் கடவுச்சொல்லை உள்ளிடவும்.',
+    passwordInputPlaceholder: 'PDF கடவுச்சொல்லை உள்ளிடவும்',
+    passwordUnlockBtn: 'PDF-ஐத் திற',
+    passwordIncorrectError: 'தவறான கடவுச்சொல். மீண்டும் முயற்சிக்கவும்.',
+    singleFileOnlyUsed: 'இந்த ஒற்றைக் கோப்பு கருவிக்கு முதல் கோப்பு மட்டுமே பயன்படுத்தப்பட்டது.',
+    confirmLargeFileMessage:
+      'இந்தக் கோப்பு 100 MB-ஐ விட பெரியது. உள்ளூரில் செயலாக்க அதிக உலாவி நினைவகமும் நேரமும் தேவைப்படலாம். தொடரவா?',
+    imgExportingAllPages: 'ஏற்றுமதி: அனைத்து பக்கங்கள்',
+    historyExportJson: 'வரலாற்றை ஏற்றுமதி செய் (JSON)',
+    historyActionFailed: 'உள்ளூர் மாற்ற வரலாற்றைப் புதுப்பிக்க முடியவில்லை.',
+    cancelProcessing: 'ரத்து செய்',
+    processingCancelled: 'செயலாக்கம் ரத்து செய்யப்பட்டது.',
   },
 };

@@ -1,9 +1,9 @@
 import React, {useState} from 'react';
-import {AlertTriangle, CheckCircle2, Clock, Search, Trash2, XCircle} from 'lucide-react';
+import {AlertTriangle, CheckCircle2, Clock, Download, Search, Trash2, XCircle} from 'lucide-react';
 import type {TranslationDictionary} from '../i18n/translations';
 import type {HistoryRecord, LanguageCode, ToolId} from '../types';
 import {TOOL_DEFINITIONS} from '../types';
-import {formatBytes, formatDateTime} from '../utils/format';
+import {downloadBlob, formatBytes, formatDateTime} from '../utils/format';
 import {ConfirmDialog} from './ConfirmDialog';
 
 interface HistoryViewProps {
@@ -38,6 +38,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     );
   });
 
+  const handleExportJson = () => {
+    const json = JSON.stringify(records, null, 2);
+    const blob = new Blob([json], {type: 'application/json'});
+    downloadBlob(blob, 'conversion-history.json');
+  };
+
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -51,14 +57,25 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         </div>
 
         {records.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setConfirmClearOpen(true)}
-            className="inline-flex items-center justify-center gap-2 min-h-[42px] px-4 py-2 rounded-xl border border-rose-200 dark:border-rose-900/70 bg-white dark:bg-slate-900 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>{t.historyClearAll}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleExportJson}
+              className="inline-flex items-center justify-center gap-2 min-h-[42px] px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>{t.historyExportJson}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setConfirmClearOpen(true)}
+              className="inline-flex items-center justify-center gap-2 min-h-[42px] px-4 py-2 rounded-xl border border-rose-200 dark:border-rose-900/70 bg-white dark:bg-slate-900 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{t.historyClearAll}</span>
+            </button>
+          </div>
         )}
       </div>
 

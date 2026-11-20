@@ -5,15 +5,21 @@ import type {ToastMessage} from '../types';
 interface ToastContainerProps {
   toasts: ToastMessage[];
   onDismiss: (id: string) => void;
+  onPause?: (id: string) => void;
+  onResume?: (id: string) => void;
 }
 
-export const ToastContainer: React.FC<ToastContainerProps> = ({toasts, onDismiss}) => {
-  if (toasts.length === 0) return null;
-
+export const ToastContainer: React.FC<ToastContainerProps> = ({
+  toasts,
+  onDismiss,
+  onPause,
+  onResume,
+}) => {
   return (
     <div
       className="fixed bottom-18 md:bottom-5 right-4 left-4 md:left-auto md:w-96 z-50 flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
+      aria-atomic="false"
     >
       {toasts.map((toast) => {
         const Icon =
@@ -36,6 +42,10 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({toasts, onDismiss
         return (
           <div
             key={toast.id}
+            onMouseEnter={() => onPause?.(toast.id)}
+            onMouseLeave={() => onResume?.(toast.id)}
+            onFocus={() => onPause?.(toast.id)}
+            onBlur={() => onResume?.(toast.id)}
             className="pointer-events-auto flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-lg"
           >
             <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${iconColor}`} />

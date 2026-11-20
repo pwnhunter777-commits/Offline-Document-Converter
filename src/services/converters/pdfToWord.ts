@@ -1,4 +1,4 @@
-import {Document, HeadingLevel, Packer, PageBreak, Paragraph, TextRun} from 'docx';
+import {Document, HeadingLevel, ImageRun, Packer, PageBreak, Paragraph, TextRun} from 'docx';
 import {destroyPdfDocument, extractPdfPagesStructuredText, loadPdfDocument} from '../pdfEngine';
 
 export interface PdfToWordResult {
@@ -23,13 +23,15 @@ function sanitizeXmlText(input: string): string {
 
 export async function convertPdfToWord(
   file: File,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  password?: string,
+  signal?: AbortSignal
 ): Promise<PdfToWordResult> {
   const buffer = await file.arrayBuffer();
-  const pdfDoc = await loadPdfDocument(buffer);
+  const pdfDoc = await loadPdfDocument(buffer, password);
 
   try {
-    const pages = await extractPdfPagesStructuredText(pdfDoc, onProgress);
+    const pages = await extractPdfPagesStructuredText(pdfDoc, onProgress, signal);
     const allFontSizes = pages.flatMap((p) => p.lines.map((l) => l.fontSize));
     const bodyFontSize = median(allFontSizes);
 
@@ -42,7 +44,7 @@ export async function convertPdfToWord(
         paragraphs.push(new Paragraph({children: [new PageBreak()]}));
       }
 
-      if (page.lines.length === 0) {
+      if (page.lines.length === 0 && page.images.length === 0) {
         paragraphs.push(
           new Paragraph({
             children: [
@@ -57,7 +59,11 @@ export async function convertPdfToWord(
         return;
       }
 
-      previewChunks.push(`--- Page ${page.pageNumber} ---\n${page.rawText}`);
+      if (page.rawText) {
+        previewChunks.push(`--- Page ${page.pageNumber} ---\n${page.rawText}`);
+      } else if (page.images.length > 0) {
+        previewChunks.push(`--- Page ${page.pageNumber} ---\n[${page.images.length} embedded image(s) extracted]`);
+      }
 
       // Group consecutive body-sized lines into paragraphs when Y gap is normal
       let bufferParagraphText = '';
@@ -92,7 +98,8 @@ export async function convertPdfToWord(
         totalChars += line.text.length;
         const isH1 = line.fontSize >= bodyFontSize * 1.45 && line.text.length < 120;
         const isH2 = !isH1 && line.fontSize >= bodyFontSize * 1.2 && line.text.length < 140;
-        const isBullet = /^[•\-–*]\s+/.test(line.text);
+        // Treat only leading • or – as bullets (not - or *)
+        const isBullet = /^[•–]\s+/.test(line.text);
 
         if (isH1 || isH2) {
           flushBuffer();
@@ -121,7 +128,7 @@ export async function convertPdfToWord(
               spacing: {after: 80},
               children: [
                 new TextRun({
-                  text: line.text.replace(/^[•\-–*]\s+/, ''),
+                  text: line.text.replace(/^[•–]\s+/, ''),
                   bold: line.isBold,
                   italics: line.isItalic,
                   size: 22,
@@ -156,6 +163,29 @@ export async function convertPdfToWord(
       }
 
       flushBuffer();
+
+      // Include embedded images extracted from the page
+      for (const img of page.images) {
+        const maxWidthPx = 520;
+        const scale = img.width > maxWidthPx ? maxWidthPx / img.width : 1;
+        const w = Math.max(16, Math.round(img.width * scale));
+        const h = Math.max(16, Math.round(img.height * scale));
+        paragraphs.push(
+          new Paragraph({
+            spacing: {before: 120, after: 160},
+            children: [
+              new ImageRun({
+                type: 'png',
+                data: img.data,
+                transformation: {
+                  width: w,
+                  height: h,
+                },
+              }),
+            ],
+          })
+        );
+      }
     });
 
     const doc = new Document({
